@@ -1,0 +1,50 @@
+# Respaldo nocturno de la base de datos (Supabase) + evita que el plan gratis se pause por inactividad.
+# Requiere el secreto SUPABASE_DB_URL (ver README → "Respaldo automático").
+name: Respaldo nocturno
+
+on:
+  schedule:
+    - cron: "17 9 * * *"   # todos los días 03:17 hora del centro de México (09:17 UTC)
+  workflow_dispatch:        # botón "Run workflow" para correrlo a mano
+
+permissions:
+  contents: read
+
+jobs:
+  respaldo:
+    runs-on: ubuntu-latest
+    container: postgres:17   # pg_dump 17 = misma versión que Supabase
+    timeout-minutes: 15
+    steps:
+      - name: Revisar secreto
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          if [ -z "$SUPABASE_DB_URL" ]; then
+            echo "::error::Falta el secreto SUPABASE_DB_URL (Settings → Secrets and variables → Actions)."
+            exit 1
+          fi
+
+      - name: Copia de la base
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          set -euo pipefail
+          FECHA=$(date -u +%Y-%m-%d)
+          mkdir -p respaldo
+          # 1) volcado SQL completo del esquema public (tablas, funciones, políticas y datos)
+          pg_dump "$SUPABASE_DB_URL" --schema=public --no-owner --no-privileges -f "respaldo/base-$FECHA.sql"
+          # 2) los mismos datos en JSON, fácil de abrir o de reimportar desde la app
+          psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -At \
+            -c "select coalesce(json_agg(json_build_object('collection',collection,'id',id,'data',data) order by collection,id),'[]') from public.docs" \
+            > "respaldo/datos-$FECHA.json"
+          gzip -9 respaldo/*
+          echo "Documentos respaldados: $(psql "$SUPABASE_DB_URL" -At -c 'select count(*) from public.docs')"
+          ls -lh respaldo
+
+      - name: Guardar respaldo
+        uses: actions/upload-artifact@v4
+        with:
+          name: respaldo-${{ github.run_number }}
+          path: respaldo/
+          retention-days: 30

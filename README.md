@@ -41,6 +41,24 @@ Sube la carpeta a GitHub y en render.com elige **New → Blueprint** (usa `rende
 2. En *Personal* ponle nombre a la tienda.
 3. Inventario → **Nuevo producto** → escanea el código con la cámara.
 
+## Respaldo automático (gratis)
+El workflow `.github/workflows/respaldo.yml` corre cada noche a las 03:17 (hora del centro de México):
+saca una copia completa de la base (`.sql` y `.json`, comprimidos) y la guarda 30 días en GitHub.
+Como usa la base todos los días, también evita que Supabase gratis la pause por inactividad.
+
+Configuración (una sola vez):
+1. **Haz privado el repo** (Settings → General → Danger Zone → Change visibility). Los respaldos traen teléfonos y direcciones de clientes.
+2. En Supabase → botón **Connect** → pestaña *Connection string* → elige **Session pooler** y copia la URI.
+   Cambia `[YOUR-PASSWORD]` por la contraseña de la base (si no la sabes: Project Settings → Database → *Reset database password*).
+3. En GitHub → Settings → **Secrets and variables → Actions → New repository secret**:
+   nombre `SUPABASE_DB_URL`, valor = la URI completa.
+4. Pestaña **Actions → Respaldo nocturno → Run workflow** para probarlo. Al terminar, el respaldo aparece abajo en *Artifacts*.
+
+**Restaurar:** descarga el artifact, descomprime `base-AAAA-MM-DD.sql.gz` y córrelo con
+`psql "$SUPABASE_DB_URL" -f base-AAAA-MM-DD.sql` sobre un proyecto vacío (o pídele ayuda a quien te mantenga la app).
+
+En la app, el dueño también tiene en *Personal* los botones **Descargar respaldo completo**, **Inventario en Excel** y **Ventas en Excel**.
+
 ## Escáner
 - **Cámara en vivo**: funciona en cualquier sitio HTTPS (Vercel/Render ya lo son). En *Vender*, el botón **Cámara** queda abierto y va agregando cada producto al ticket.
 - **Foto**: alternativa si el navegador no da cámara en vivo.
@@ -55,6 +73,7 @@ db.js                 capa de datos sobre Supabase (documentos + tiempo real)
 config.js             URL y anon key de Supabase
 supabase/schema.sql   tabla, roles, políticas RLS, bucket de fotos, trigger del dueño
 supabase/ejemplos.sql productos de prueba
+.github/workflows/respaldo.yml  respaldo nocturno
 ```
 
 ## Notas

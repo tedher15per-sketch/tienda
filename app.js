@@ -474,6 +474,11 @@ VIEWS.personal=root=>{const nm=h('input',{class:'input',id:'cfg-name',value:S.co
     h('li',null,'Crean su cuenta con correo y contraseña. Entran como clientes y tocan “¿Trabajas en la tienda?” para pedir puesto de Cajero o Almacén.'),
     h('li',null,'Tú apruebas la solicitud aquí y su menú cambia al instante.')))),
   panel('Solicitudes de acceso',reqs),panel('Tu equipo',staff),
+  panel('Respaldos y reportes',h('div',{class:'stack',style:'gap:10px'},
+   h('p',{class:'muted',style:'margin:0'},'Además del respaldo automático de cada noche, aquí bajas una copia cuando quieras.'),
+   h('div',{class:'row'},h('button',{class:'btn primary',onclick:downloadBackup},ic('copy'),'Descargar respaldo completo'),
+    h('button',{class:'btn',onclick:downloadInventoryCSV},ic('box'),'Inventario en Excel (CSV)'),
+    h('button',{class:'btn',onclick:downloadSalesCSV},ic('receipt'),'Ventas en Excel (CSV)')))),
   panel('Probar la app con otro rol',h('div',{class:'row'},['cajero','almacen','cliente'].map(r=>h('button',{class:'btn',onclick:()=>setViewAs(r)},'Ver como '+ROLE_LABEL[r])))));
  return()=>{reqs.replaceChildren();if(!S.requests.length)reqs.append(h('p',{class:'muted',style:'margin:0'},'No hay solicitudes pendientes.'));
   S.requests.forEach(r=>reqs.append(h('div',{class:'li'},h('div',{class:'thumb'},initial(r.label)),h('div',{class:'grow'},h('div',{class:'t'},r.label||'Sin nombre'),h('div',{class:'s'},'Quiere ser '+ROLE_LABEL[r.role]+' · '+when(r.at))),
@@ -486,6 +491,23 @@ VIEWS.personal=root=>{const nm=h('input',{class:'input',id:'cfg-name',value:S.co
     h('select',{class:'input',style:'width:auto','aria-label':'Rol',onchange:e=>save(()=>S.db.doc('staff/'+uid).update({role:e.target.value}),'Rol actualizado')},['admin','cajero','almacen'].map(r=>h('option',{value:r,selected:s.role===r},r==='admin'?'Encargado (todo)':ROLE_LABEL[r]))),
     h('button',{class:'btn ghost',onclick:()=>save(()=>S.db.doc('staff/'+uid).delete(),'Acceso retirado')},'Quitar')))});
   }};
+
+/* RESPALDOS Y REPORTES */
+const BACKUP_COLS=['products','sales','orders','purchases','fiados','staff','requests','config'];
+function saveFile(name,text,type){const url=URL.createObjectURL(new Blob([text],{type}));const a=h('a',{href:url,download:name,style:'display:none'});document.body.append(a);a.click();setTimeout(()=>{URL.revokeObjectURL(url);a.remove()},1500)}
+const csvCell=v=>'"'+String(v==null?'':v).replace(/"/g,'""')+'"';
+const toCSV=rows=>'\ufeff'+rows.map(r=>r.map(csvCell).join(',')).join('\r\n');
+async function downloadBackup(){toast('Preparando respaldo…');
+ try{const out={app:'Mostrador Abarrotes',tienda:S.config.name||'',fecha:new Date().toISOString(),datos:{}};
+  for(const c of BACKUP_COLS){const snap=await S.db.collection(c).get();out.datos[c]=snap.docs.map(d=>Object.assign({id:d.id},d.data()))}
+  saveFile('respaldo-'+ymd(Date.now())+'.json',JSON.stringify(out),'application/json');toast('Respaldo descargado')}catch(e){handleErr(e)}}
+function downloadInventoryCSV(){const rows=[['Código','Nombre','Categoría','Unidad','Precio','Costo','Existencia','Mínimo','Caducidad','Valor a costo']];
+ prods().forEach(p=>rows.push([p.barcode,p.name,p.category,p.unit,p.price,p.cost,p.stock,p.minStock,p.expiry,r2((+p.cost||0)*Math.max(0,+p.stock||0))]));
+ saveFile('inventario-'+ymd(Date.now())+'.csv',toCSV(rows),'text/csv;charset=utf-8');toast('Inventario descargado')}
+async function downloadSalesCSV(){toast('Preparando ventas…');
+ try{const snap=await S.db.collection('sales').orderBy('at','desc').limit(5000).get();const rows=[['Folio','Fecha','Hora','Forma de pago','Origen','Producto','Cantidad','Unidad','Precio','Importe','Total del ticket']];
+  snap.docs.map(d=>d.data()).forEach(x=>(x.items||[]).forEach(i=>rows.push([x.folio,ymd(x.at),hhmm(x.at),PAY[x.payment]||x.payment,x.origin||'mostrador',i.name,i.qty,i.unit,i.price,r2(i.qty*i.price),x.total])));
+  saveFile('ventas-'+ymd(Date.now())+'.csv',toCSV(rows),'text/csv;charset=utf-8');toast('Ventas descargadas')}catch(e){handleErr(e)}}
 
 /* TIENDA (cliente) */
 VIEWS.tienda=root=>{const inp=h('input',{class:'input',id:'shop-search',placeholder:'¿Qué necesitas? Leche, huevo, tortillas…',value:S.shopSearch,oninput:e=>{S.shopSearch=e.target.value;upd()}});
