@@ -1,0 +1,11 @@
+{
+  "name": "Mostrador Abarrotes",
+  "short_name": "Mostrador",
+  "description": "Caja, inventario, pedidos y fiado para tu tienda de abarrotes.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#edf3f0",
+  "theme_color": "#17694a",
+  "lang": "es-MX",
+  "icons": [{ "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }]
+}

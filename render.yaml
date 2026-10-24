@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: mostrador-abarrotes
+    runtime: static
+    staticPublishPath: .
+    headers:
+      - path: /*
+        name: Permissions-Policy
+        value: camera=(self)
