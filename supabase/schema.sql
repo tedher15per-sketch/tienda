@@ -28,14 +28,14 @@ language sql stable security definer set search_path = public as $$
     (select data->>'role' from public.docs where collection = 'staff' and id = auth.uid()::text),
     'cliente')
 $$;
-create or replace function public.is_staff() returns boolean language sql stable as $$
+create or replace function public.is_staff() returns boolean language sql stable set search_path = public as $$
   select public.app_role() in ('admin','cajero','almacen') $$;
-create or replace function public.is_admin() returns boolean language sql stable as $$
+create or replace function public.is_admin() returns boolean language sql stable set search_path = public as $$
   select public.app_role() = 'admin' $$;
 
 -- Quién puede escribir qué (insert / update / delete)
 create or replace function public.can_write(c text, i text, d jsonb) returns boolean
-language sql stable as $$
+language sql stable set search_path = public as $$
   select case c
     when 'products'  then public.is_staff()                                   -- el cajero descuenta existencias al vender
     when 'sales'     then public.is_staff()
@@ -115,6 +115,9 @@ begin
   end if;
   return new;
 end $$;
+-- solo el trigger la usa; nadie la llama por la API
+revoke execute on function public.bootstrap_owner() from public, anon, authenticated;
+-- app_role() sí debe ser ejecutable: las políticas la llaman con el rol de quien consulta (solo revela tu propio puesto)
 drop trigger if exists on_auth_user_created_owner on auth.users;
 create trigger on_auth_user_created_owner after insert on auth.users
   for each row execute function public.bootstrap_owner();
