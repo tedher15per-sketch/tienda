@@ -59,6 +59,40 @@ Configuración (una sola vez):
 
 En la app, el dueño también tiene en *Personal* los botones **Descargar respaldo completo**, **Inventario en Excel** y **Ventas en Excel**.
 
+## Inventario por WhatsApp
+Tú o tu personal le escriben al WhatsApp de la tienda y el inventario se actualiza solo:
+
+| Mensaje | Qué hace |
+|---|---|
+| `llegaron 24 coca 600 y 12 leche` | Entrada de mercancía |
+| `merma 2 pan` · `caducaron 3 yogur` | Salida / merma |
+| `quedan 5 tortillas` | Conteo exacto |
+| `cuánto hay de huevo` | Consulta existencia y precio |
+| `qué falta` · `qué caduca` · `ventas de hoy` | Reportes rápidos |
+| `ayuda` | Lista de comandos |
+
+Entiende números con letra ("una docena", "medio kilo"), gramos → kilos, códigos de barras y **apodos** (Inventario → Editar → *Apodos para WhatsApp*, p. ej. `coca, refresco`). Si hay duda entre dos productos, pregunta y respondes con el número. Cada movimiento queda en el historial del producto con el nombre de quien lo mandó. Solo responden los números que el dueño autoriza en **Personal → WhatsApp de inventario**.
+
+Código: `supabase/functions/whatsapp/` (ya desplegado en Supabase como función `whatsapp`).
+
+### Conectar con Meta (una sola vez, ~20 min)
+1. Entra a [developers.facebook.com](https://developers.facebook.com) → **Mis apps → Crear app** → caso de uso *Conectar con clientes por WhatsApp* (tipo Empresa).
+2. En **WhatsApp → Configuración de la API** Meta te da un **número de prueba**. En *Para* agrega tu celular y confírmalo con el código que te llega.
+3. Inventa una palabra secreta para verificar (ej. `tiendita-2026-xyz`). En Supabase → **Edge Functions → Secrets** agrega:
+   - `WA_VERIFY_TOKEN` = tu palabra secreta
+   - `WA_APP_SECRET` = Meta → *Configuración de la app → Básica → Clave secreta de la app*
+   - `WA_TOKEN` = el token de acceso de *Configuración de la API* (el temporal dura 24 h; el permanente se saca en *Configuración del negocio → Usuarios del sistema → Generar token* con permisos `whatsapp_business_messaging` y `whatsapp_business_management`)
+4. En Meta → **WhatsApp → Configuración → Webhook → Editar**:
+   - URL de devolución: `https://vrzchnnwjczaugobweml.supabase.co/functions/v1/whatsapp`
+   - Token de verificación: tu palabra secreta → **Verificar y guardar**
+   - En *Campos del webhook* suscríbete a **messages**.
+5. En la app → Personal → WhatsApp de inventario, autoriza tu celular (10 dígitos).
+6. Manda `hola` al número de prueba. Debe contestarte con la lista de comandos.
+
+Para usar el número real de la tienda: en *Configuración de la API → Agregar número de teléfono* registra el chip (no debe estar en la app normal de WhatsApp) y Meta te pedirá verificar el negocio.
+
+**Costo:** los mensajes que recibe la tienda son gratis y las respuestas también, hasta 1,000 al mes por número.
+
 ## Escáner
 - **Cámara en vivo**: funciona en cualquier sitio HTTPS (Vercel/Render ya lo son). En *Vender*, el botón **Cámara** queda abierto y va agregando cada producto al ticket.
 - **Foto**: alternativa si el navegador no da cámara en vivo.
@@ -74,6 +108,7 @@ config.js             URL y anon key de Supabase
 supabase/schema.sql   tabla, roles, políticas RLS, bucket de fotos, trigger del dueño
 supabase/ejemplos.sql productos de prueba
 .github/workflows/respaldo.yml  respaldo nocturno
+supabase/functions/whatsapp/   bot de inventario por WhatsApp
 ```
 
 ## Notas

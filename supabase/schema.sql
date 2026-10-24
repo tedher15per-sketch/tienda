@@ -3,7 +3,8 @@
 --  Pégalo completo en Supabase → SQL Editor → Run. Se puede correr de nuevo sin romper nada.
 --
 --  Modelo: una tabla `docs` tipo documento (collection, id, data jsonb).
---  Colecciones: products, sales, orders, purchases, fiados, staff, requests, config
+--  Colecciones: products, sales, orders, purchases, fiados, staff, requests, config, ajustes
+--  (walog y wapend las usa solo el bot de WhatsApp con la service key)
 --  Roles (en staff/<uid>.role): admin | cajero | almacen. Cualquiera sin registro en staff es "cliente".
 --  La PRIMERA cuenta que se registre queda como dueño (admin) automáticamente.
 -- =====================================================================
@@ -42,6 +43,7 @@ language sql stable set search_path = public as $$
     when 'fiados'    then public.is_staff()
     when 'purchases' then public.app_role() in ('admin','almacen')
     when 'config'    then public.is_admin()
+    when 'ajustes'   then public.is_admin()                                   -- números autorizados de WhatsApp
     when 'staff'     then public.is_admin()
     when 'requests'  then public.is_admin()
                        or (auth.uid() is not null and i = auth.uid()::text and d->>'role' in ('cajero','almacen'))
@@ -58,6 +60,7 @@ create policy docs_select on public.docs for select using (
   case collection
     when 'products'  then true                                  -- el catálogo es público
     when 'config'    then true
+    when 'ajustes'   then public.is_admin()
     when 'orders'    then public.is_staff() or data->>'customer' = auth.uid()::text
     when 'staff'     then public.is_admin() or id = auth.uid()::text
     when 'requests'  then public.is_admin() or id = auth.uid()::text

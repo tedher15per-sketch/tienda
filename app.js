@@ -329,6 +329,7 @@ function openProductForm(p,presetCode){const isNew=!p;p=p||{};let photo=p.photo|
   const f={};const mk=(k,attrs)=>f[k]=h('input',Object.assign({class:'input',id:'pf-'+k},attrs));
   mk('barcode',{class:'input mono',inputmode:'numeric',value:presetCode||p.barcode||'',placeholder:'Escanea o escribe'});
   mk('name',{value:p.name||'',placeholder:'Ej. Refresco de cola 600 ml',required:true});
+  mk('aliases',{value:p.aliases||'',placeholder:'coca, coca cola, refresco'});
   mk('price',{class:'input mono',type:'number',inputmode:'decimal',step:'0.5',min:'0',value:p.price!=null?p.price:''});
   mk('cost',{class:'input mono',type:'number',inputmode:'decimal',step:'0.5',min:'0',value:p.cost!=null?p.cost:''});
   mk('stock',{class:'input mono',type:'number',inputmode:'decimal',step:'any',min:'0',value:p.stock!=null?p.stock:''});
@@ -347,6 +348,7 @@ function openProductForm(p,presetCode){const isNew=!p;p=p||{};let photo=p.photo|
   body.append(ph,h('div',{class:'form-grid'},
    h('label',{class:'field full'},h('span',null,'Código de barras'),h('div',{class:'row',style:'flex-wrap:nowrap'},f.barcode,h('button',{class:'icon-btn',type:'button','aria-label':'Escanear código',onclick:()=>scanInto()},ic('camera')))),
    h('label',{class:'field full'},h('span',null,'Nombre'),f.name),
+   h('label',{class:'field full'},h('span',null,'Apodos para WhatsApp (separados por coma)'),f.aliases),
    h('label',{class:'field'},h('span',null,'Categoría'),f.category),h('label',{class:'field'},h('span',null,'Se vende por'),f.unit),
    h('label',{class:'field'},h('span',null,'Precio de venta'),f.price),h('label',{class:'field'},h('span',null,'Costo'),f.cost),
    h('div',{class:'full'},marg),
@@ -361,7 +363,7 @@ function openProductForm(p,presetCode){const isNew=!p;p=p||{};let photo=p.photo|
    if(f.price.value===''){err.append(h('div',{class:'banner warn'},'Falta el precio de venta.'));return}
    const dup=code&&findByCode(code);if(dup&&dup.id!==p.id){err.append(h('div',{class:'banner warn'},'El código '+code+' ya pertenece a “'+dup.name+'”.'));return}
    const id=p.id||S.db.collection('products').doc().id;const stock=r3(f.stock.value);const prev=isNew?0:(+p.stock||0);
-   const doc={name,barcode:code,category:f.category.value,unit:f.unit.value,price:r2(f.price.value),cost:r2(f.cost.value),stock,minStock:r3(f.minStock.value),expiry:f.expiry.value||'',photo,example:!!p.example&&!isNew,updatedAt:Date.now(),
+   const doc={name,aliases:f.aliases.value.trim(),barcode:code,category:f.category.value,unit:f.unit.value,price:r2(f.price.value),cost:r2(f.cost.value),stock,minStock:r3(f.minStock.value),expiry:f.expiry.value||'',photo,example:!!p.example&&!isNew,updatedAt:Date.now(),
     log:isNew?(stock?[{d:stock,r:'Alta de producto',at:Date.now(),by:S.uid||''}]:[]):(stock!==prev?[{d:r3(stock-prev),r:'Edición manual',at:Date.now(),by:S.uid||''},...(p.log||[])].slice(0,25):(p.log||[]))};
    if(await save(()=>S.db.doc('products/'+id).set(doc),isNew?'Producto dado de alta':'Cambios guardados'))openProduct(id)}
   if(isNew&&!presetCode)setTimeout(()=>f.barcode.focus(),40);else if(isNew)setTimeout(()=>f.name.focus(),40)})}
@@ -465,7 +467,18 @@ function openFiado(id){openModal('Cuenta de fiado',body=>{const head=h('div');co
    role()==='admin'?h('button',{class:'btn ghost',style:'min-height:0;padding:0',onclick:()=>confirmInline(conf,'¿Borrar la cuenta de '+f.name+'?','Sí, borrar',async()=>{closeModal();await save(()=>S.db.doc('fiados/'+id).delete(),'Cuenta borrada')})},'Borrar cuenta'):null))}})}
 
 /* PERSONAL */
-VIEWS.personal=root=>{const nm=h('input',{class:'input',id:'cfg-name',value:S.config.name||'Mi Tiendita'});const reqs=h('div');const staff=h('div');
+VIEWS.personal=root=>{const waBox=h('div',{class:'stack',style:'gap:12px'});
+ const waPhone=h('input',{class:'input mono',id:'wa-phone',inputmode:'tel',placeholder:'55 1234 5678'});const waName=h('input',{class:'input',id:'wa-name',placeholder:'Nombre (ej. Juan almacén)'});
+ const waList=h('div',{class:'list'});
+ const waSave=nums=>save(()=>S.db.doc('ajustes/whatsapp').set({numbers:nums,updatedAt:Date.now()}));
+ waBox.append(h('p',{class:'muted',style:'margin:0'},'Estos números pueden mover el inventario mandando mensajes al WhatsApp de la tienda. Ejemplos: ',h('span',{class:'mono'},'llegaron 24 coca y 12 leche'),' · ',h('span',{class:'mono'},'merma 2 pan'),' · ',h('span',{class:'mono'},'qué falta'),' · ',h('span',{class:'mono'},'ventas de hoy'),'.'),
+  waList,h('div',{class:'form-grid'},h('label',{class:'field'},h('span',null,'Celular (10 dígitos)'),waPhone),h('label',{class:'field'},h('span',null,'Nombre'),waName)),
+  h('button',{class:'btn primary',style:'align-self:flex-start',onclick:async()=>{const ph=waPhone.value.replace(/\D/g,'').slice(-10);if(ph.length!==10)return toast('Escribe un celular de 10 dígitos','bad');
+   const nums=((S.wa&&S.wa.numbers)||[]).filter(n=>n.phone!==ph).concat([{phone:ph,label:waName.value.trim()}]);if(await waSave(nums)){waPhone.value='';waName.value='';toast('Número autorizado')}}},ic('plus'),'Autorizar número'),
+  h('p',{class:'muted small',style:'margin:0'},'Para que el bot entienda “coca” o “maseca”, ponle apodos a cada producto en Inventario → Editar.'));
+ S.waUpd=()=>{const nums=(S.wa&&S.wa.numbers)||[];waList.replaceChildren(nums.length?null:h('p',{class:'muted',style:'margin:0'},'Aún no hay números autorizados.'),
+  ...nums.map(n=>h('div',{class:'li'},ic('check'),h('div',{class:'grow'},h('div',{class:'t'},n.label||'Sin nombre'),h('div',{class:'s mono'},n.phone)),h('button',{class:'btn ghost',onclick:()=>waSave(nums.filter(x=>x.phone!==n.phone)).then(ok=>ok&&toast('Número quitado'))},'Quitar'))))};
+const nm=h('input',{class:'input',id:'cfg-name',value:S.config.name||'Mi Tiendita'});const reqs=h('div');const staff=h('div');
  root.append(h('div',{class:'head'},h('h1',{class:'display'},'Personal y tienda')),
   h('div',{class:'grid2'},
    panel('Nombre de la tienda',h('div',{class:'stack',style:'gap:10px'},nm,h('button',{class:'btn primary',onclick:()=>save(()=>S.db.doc('config/store').set(Object.assign({},S.config,{name:nm.value.trim()||'Mi Tiendita'})),'Nombre guardado')},'Guardar'))),
@@ -474,13 +487,14 @@ VIEWS.personal=root=>{const nm=h('input',{class:'input',id:'cfg-name',value:S.co
     h('li',null,'Crean su cuenta con correo y contraseña. Entran como clientes y tocan “¿Trabajas en la tienda?” para pedir puesto de Cajero o Almacén.'),
     h('li',null,'Tú apruebas la solicitud aquí y su menú cambia al instante.')))),
   panel('Solicitudes de acceso',reqs),panel('Tu equipo',staff),
+  panel('WhatsApp de inventario',waBox),
   panel('Respaldos y reportes',h('div',{class:'stack',style:'gap:10px'},
    h('p',{class:'muted',style:'margin:0'},'Además del respaldo automático de cada noche, aquí bajas una copia cuando quieras.'),
    h('div',{class:'row'},h('button',{class:'btn primary',onclick:downloadBackup},ic('copy'),'Descargar respaldo completo'),
     h('button',{class:'btn',onclick:downloadInventoryCSV},ic('box'),'Inventario en Excel (CSV)'),
     h('button',{class:'btn',onclick:downloadSalesCSV},ic('receipt'),'Ventas en Excel (CSV)')))),
   panel('Probar la app con otro rol',h('div',{class:'row'},['cajero','almacen','cliente'].map(r=>h('button',{class:'btn',onclick:()=>setViewAs(r)},'Ver como '+ROLE_LABEL[r])))));
- return()=>{reqs.replaceChildren();if(!S.requests.length)reqs.append(h('p',{class:'muted',style:'margin:0'},'No hay solicitudes pendientes.'));
+ return()=>{S.waUpd&&S.waUpd();reqs.replaceChildren();if(!S.requests.length)reqs.append(h('p',{class:'muted',style:'margin:0'},'No hay solicitudes pendientes.'));
   S.requests.forEach(r=>reqs.append(h('div',{class:'li'},h('div',{class:'thumb'},initial(r.label)),h('div',{class:'grow'},h('div',{class:'t'},r.label||'Sin nombre'),h('div',{class:'s'},'Quiere ser '+ROLE_LABEL[r.role]+' · '+when(r.at))),
    h('button',{class:'btn primary',onclick:()=>save(async()=>{await S.db.doc('staff/'+r.id).set({role:r.role,label:r.label||'',at:Date.now()});await S.db.doc('requests/'+r.id).delete()},'Acceso aprobado')},'Aprobar'),
    h('button',{class:'btn ghost',onclick:()=>save(()=>S.db.doc('requests/'+r.id).delete(),'Solicitud rechazada')},'Rechazar'))));
@@ -594,10 +608,11 @@ const SUBS={
  orders:()=>S.db.collection('orders').orderBy('at','desc').limit(300).onSnapshot(q=>{S.orders=q.docs.map(d=>Object.assign({id:d.id},d.data()));S.loaded.orders=true;schedule()},onErr('orders')),
  purchases:()=>S.db.collection('purchases').orderBy('at','desc').limit(200).onSnapshot(q=>{S.purchases=q.docs.map(d=>Object.assign({id:d.id},d.data()));S.loaded.purchases=true;schedule()},onErr('purchases')),
  fiados:()=>S.db.collection('fiados').onSnapshot(q=>{S.fiados=q.docs.map(d=>Object.assign({id:d.id},d.data()));S.loaded.fiados=true;schedule()},onErr('fiados')),
+ wa:()=>S.db.doc('ajustes/whatsapp').onSnapshot(d=>{S.wa=d.exists?d.data():{numbers:[]};schedule()},onErr('wa')),
  staffAll:()=>S.db.collection('staff').onSnapshot(q=>{S.staff=new Map(q.docs.map(d=>[d.id,d.data()]));schedule()},onErr('staffAll')),
  requests:()=>S.db.collection('requests').onSnapshot(q=>{S.requests=q.docs.map(d=>Object.assign({id:d.id},d.data()));schedule()},onErr('requests')),
  myorders:()=>S.uid?S.db.collection('orders').where('customer','==',S.uid).onSnapshot(q=>{S.myOrders=q.docs.map(d=>Object.assign({id:d.id},d.data()));S.loaded.myorders=true;schedule()},onErr('myorders')):null};
-const NEED={admin:['products','sales','orders','purchases','fiados','requests','staffAll','myorders'],cajero:['products','sales','orders','fiados','myorders'],almacen:['products','purchases','myorders'],cliente:['products','myorders']};
+const NEED={admin:['products','sales','orders','purchases','fiados','requests','staffAll','wa','myorders'],cajero:['products','sales','orders','fiados','myorders'],almacen:['products','purchases','myorders'],cliente:['products','myorders']};
 function ensureSubs(){if(!S.db||!S.realRole)return;const need=new Set([...NEED[S.realRole],...NEED[role()]]);need.forEach(k=>{if(!S.subs[k]){try{S.subs[k]=SUBS[k]()||true}catch(e){console.warn(e)}}})}
 function resolveRole(){const r=S.myStaff&&S.myStaff.role;S.realRole=VIEWS_BY_ROLE[r]?r:'cliente';if(S.realRole!=='admin')S.viewAs=null;S.ready=true;ensureSubs();S.mounted=null;schedule()}
 (async function boot(){
